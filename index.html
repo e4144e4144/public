@@ -1,1 +1,55 @@
 
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Traffic Sign Radar JP</title>
+
+<link rel="stylesheet"
+ href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<link rel="manifest" href="manifest.json">
+
+<style>
+body{margin:0;font-family:sans-serif;}
+#map{height:100vh;}
+.panel{
+ position:absolute;top:10px;left:10px;
+ background:white;padding:12px;
+ border-radius:12px;z-index:1000;
+ box-shadow:0 0 12px rgba(0,0,0,.25);
+ width:260px;font-size:14px;
+ max-height:90vh;overflow:auto;
+}
+button{width:100%;margin-top:6px;}
+</style>
+</head>
+<body>
+
+<div id="map"></div>
+
+<div class="panel">
+<b>🇯🇵 標識レーダー</b><br>
+
+<b>表示する標識</b><br>
+<div id="signList"></div>
+
+検索半径(m)
+<input id="radius" type="number" value="2000"/>
+
+<button onclick="manualSearch()">現在地検索</button>
+<button onclick="toggleAuto()" id="autoBtn">自動更新OFF</button>
+</div>
+
+<script src="app.js"></script>
+
+<script>
+if("serviceWorker" in navigator){
+ navigator.serviceWorker.register("service-worker.js");
+}
+</script>
+
+</body>
+</html>
