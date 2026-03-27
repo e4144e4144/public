@@ -1,4 +1,10 @@
+// ===== エラー表示用 =====
+function showMessage(msg){
+ alert(msg);
+ console.log(msg);
+}
 
+// ===== 標識マスタ =====
 const SIGNS = {
  "JP:224":"一時停止",
  "JP:250":"進入禁止",
@@ -11,15 +17,10 @@ const SIGNS = {
  "JP:304":"通行止め",
  "JP:305":"車両進入禁止",
  "JP:306":"歩行者専用",
- "JP:307":"自転車専用",
- "JP:308":"一方通行",
- "JP:309":"大型通行止め",
- "JP:310":"高さ制限",
- "JP:311":"幅制限",
- "JP:312":"重量制限"
+ "JP:308":"一方通行"
 };
 
-// チェックボックス生成
+// ===== チェックボックス生成 =====
 const signList=document.getElementById("signList");
 Object.entries(SIGNS).forEach(([code,name])=>{
  const label=document.createElement("label");
@@ -27,35 +28,67 @@ Object.entries(SIGNS).forEach(([code,name])=>{
  signList.appendChild(label);
 });
 
+// ===== 地図初期化 =====
 const map=L.map('map').setView([35.68,139.76],5);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(map);
 
 let markersLayer=L.layerGroup().addTo(map);
 let currentMarker,watchId,lastFetchPos;
 
+// ===== 選択取得 =====
 function getSelectedCodes(){
  return [...document.querySelectorAll("#signList input:checked")]
         .map(e=>e.value);
 }
 
+// ===== Overpass取得 =====
 async function fetchSigns(lat,lon,radius,codes){
- const regex=codes.join("|");
- const query=`
- [out:json];
- node["traffic_sign"~"${regex}"]
- (around:${radius},${lat},${lon});
- out;`;
- const url="https://overpass-api.de/api/interpreter?data="+encodeURIComponent(query);
- const res=await fetch(url);
- return await res.json();
+ try{
+   const regex=codes.join("|");
+
+   const query=`
+   [out:json][timeout:25];
+   node["traffic_sign"~"${regex}"]
+   (around:${radius},${lat},${lon});
+   out body;`;
+
+   const url="https://overpass-api.de/api/interpreter?data="+encodeURIComponent(query);
+
+   console.log("Overpass query:",url);
+
+   const res=await fetch(url);
+
+   if(!res.ok){
+     showMessage("Overpass APIエラー："+res.status);
+     return {elements:[]};
+   }
+
+   const data=await res.json();
+   console.log("取得件数",data.elements.length);
+
+   if(data.elements.length===0){
+     showMessage("この周辺に標識データがありません（OSM未登録エリア）");
+   }
+
+   return data;
+
+ }catch(e){
+   showMessage("通信エラー："+e);
+   return {elements:[]};
+ }
 }
 
+// ===== 表示 =====
 async function updateSigns(lat,lon){
  const radius=document.getElementById("radius").value;
  const codes=getSelectedCodes();
- if(codes.length===0) return;
+ if(codes.length===0){
+   showMessage("標識を選択してください");
+   return;
+ }
 
  markersLayer.clearLayers();
+
  const data=await fetchSigns(lat,lon,radius,codes);
 
  data.elements.forEach(e=>{
@@ -65,18 +98,33 @@ async function updateSigns(lat,lon){
  });
 }
 
+// ===== 現在地検索 =====
 async function manualSearch(){
+ if(!navigator.geolocation){
+   showMessage("GPS未対応ブラウザ");
+   return;
+ }
+
  navigator.geolocation.getCurrentPosition(async pos=>{
    const {latitude,longitude}=pos.coords;
+
    map.setView([latitude,longitude],15);
+
    if(currentMarker) map.removeLayer(currentMarker);
-   currentMarker=L.marker([latitude,longitude]).addTo(map).bindPopup("現在地");
+   currentMarker=L.marker([latitude,longitude]).addTo(map)
+     .bindPopup("現在地").openPopup();
+
    updateSigns(latitude,longitude);
+
+ },err=>{
+   showMessage("位置情報許可してください");
  });
 }
 
+// ===== 自動更新 =====
 function toggleAuto(){
  const btn=document.getElementById("autoBtn");
+
  if(watchId){
    navigator.geolocation.clearWatch(watchId);
    watchId=null;
@@ -86,7 +134,6 @@ function toggleAuto(){
 
  watchId=navigator.geolocation.watchPosition(pos=>{
    const {latitude,longitude}=pos.coords;
-   map.setView([latitude,longitude]);
 
    if(!lastFetchPos||distance(lastFetchPos,[latitude,longitude])>100){
      lastFetchPos=[latitude,longitude];
@@ -97,6 +144,7 @@ function toggleAuto(){
  btn.innerText="自動更新ON";
 }
 
+// 距離
 function distance(a,b){
  const R=6371000;
  const dLat=(b[0]-a[0])*Math.PI/180;
